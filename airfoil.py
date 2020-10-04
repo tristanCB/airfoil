@@ -9,11 +9,13 @@ import numpy as np
 import pandas
 import math
 import time
+import NACA
 # Summary of program
 """
 This prgram computes velocity and pressure coefficients
 around an airfoil, whose contor is approximated by vortex panels
 of linearly varying strength.
+Assumptions: 2D incompressible flow
 """
 # Quick links FORTRAN 77
 # https://www.obliquity.com/computer/fortran/array.html
@@ -25,7 +27,7 @@ of linearly varying strength.
 #
 # Will have to find ways of using CRAMER and DETERM subroutines ...
 
-def determ(ARRAY, N, checkPrecision = True):
+def determ(ARRAY, N, checkPrecision = False):
     """
     DETERM is the value of the determinant of an N*N matrix called ARRAY,
     computed by the technique of pivotal condensation. This function is 
@@ -57,14 +59,14 @@ def determ(ARRAY, N, checkPrecision = True):
             if checkPrecision == True:
                 deciNpDetC              = np.linalg.det(ARRAY)
                 deciPivCondensationChow = DETERM
-                diff = deciPivCondensationChow - deciNpDetC
+                diff = 1 - deciPivCondensationChow/deciNpDetC
                 print(
                         f"""
                         Numpy func (np.linalg.det(ARRAY))   ==> {deciNpDetC}
                         Det. by pivitoal condensation       ==> {deciPivCondensationChow}
                         Diff                                  > {diff}
                         """)
-                assert abs(diff) < 0.00001
+                assert abs(diff) < 0.0001
                 
             return DETERM
         else:
@@ -99,133 +101,176 @@ def cramer(C, A, X, N):
         # print(f"GAMMA will now be? --> {X[k]}")
     return X
 
-
-### MAIN LOOP
-numberOfPanels = 12
-
-M = numberOfPanels
-MP1 = M + 1
-
-# Coordinates of control and boundary points
-XB, YB  = (np.zeros((M)) for i in range(2))
-X, Y    = (np.zeros((M)) for i in range(2))
-# Represents γ' in text
-GAMMA   = np.zeros((M))
-
-S, SINE, COSINE, THETA, V, CP, RHS  = (np.zeros((12)) for i in range(7))
-CN1, CN2, CT1, CT2 =  (np.zeros((12,12)) for i in range(4))
-AN = np.zeros((13,13))
-
-AT = np.zeros((12,13))
-
-# Specify coordinates (XB, YB) of boundary points on airfoil surface. 
-# The last point coinsides with the first
-XB = np.array([1.,.933,.750,.500,.250,.067,.0,.067,.25,.500,.750,.933, 1.0])
-YB = np.array([.0,-.005,-.017,-.033,-.042,-.033,.0,.045,.076,.072,.044,.013,0.])
-print(
-    f"""
-    Boundary points on the airfoil surface
-    XB {XB.shape} = {XB}
-    YB {YB.shape} = {YB}
+def panelMethod(XB: np.array([]),YB: np.array([])) -> dict:
     """
-    )
+    # Specify coordinates (XB, YB) of boundary points on airfoil surface. 
+    # The last point coinsides with the first
+    XB = np.array([1.,.933,.750,.500,.250,.067,.0,.067,.25,.500,.750,.933, 1.0])
+    YB = np.array([.0,-.005,-.017,-.033,-.042,-.033,.0,.045,.076,.072,.044,.013,0.])
+    """
+    # Get problem size depending on input data
+    numberOfPanels = XB.shape[0]-1
+    M = numberOfPanels
+    MP1 = M + 1
 
+    # Coordinates of control and boundary points
+    # XB, YB  = (np.zeros((M)) for i in range(2))
+    X, Y    = (np.zeros((M)) for i in range(2))
+    # Represents γ' in text
+    GAMMA   = np.zeros((M))
 
-PI = 4.0 * np.arctan(1.0)
-ALPHA = 8.0 * PI/180
+    S, SINE, COSINE, THETA, V, CP, RHS  = (np.zeros((M)) for i in range(7))
+    CN1, CN2, CT1, CT2 =  (np.zeros((M,M)) for i in range(4))
+    AN = np.zeros((MP1,MP1))
 
-# Watch out the negative 1 was added befcause of zero based indexing??
-for i in range(M):
-    IP1         = i + 1
-    X[i]        = 0.5*(XB[i] + XB[IP1])
-    Y[i]        = 0.5*(YB[i] + YB[IP1])
-    S[i]        = np.sqrt( (XB[IP1] - XB[i])**2 + (YB[IP1] - YB[i])**2 )
-    THETA[i]    = np.arctan2( (YB[IP1] - YB[i]), (XB[IP1] - XB[i]))
-    SINE[i]     = np.sin(THETA[i])
-    COSINE[i]   = np.cos(THETA[i])
-    RHS[i]      = np.sin(THETA[i] - ALPHA)
+    AT = np.zeros((M,MP1))
 
-for i in range(M):
-    for j in range(M):
-        if i == j:
-            # print(f"I is {i}, J is {j}") # UID for debugging
-            CN1[i,j] = -1.0
-            CN2[i,j] = 1.0
-            CT1[i,j] = 0.5*PI
-            CT2[i,j] = 0.5*PI
-            # continue # break # still unsure about this
-        else:
-            A = (-(X[i] - XB[j]))*COSINE[j] - (Y[i]-YB[j])*SINE[j]
-            B = (X[i]-XB[j])**2 + (Y[i]-YB[j])**2
-            # B = ((X[i]-XB[j])**2) + ((Y[i] + YB[j])**2) # Watch out
-            C = np.sin(THETA[i] - THETA[j])
-            D = np.cos(THETA[i] - THETA[j])
-            E = (X[i] - XB[j]) * SINE[j] - (Y[i] - YB[j])*COSINE[j]
-            # print(f"ID: {i+1} {j+1}")
-            F = np.log(1.0 + S[j]*(S[j] + 2.0 * A)/B)
-            if np.isnan(F):
-                F = np.nan_to_num(F)
-            G = np.arctan2(E*S[j], B+A*S[j])
-            P = ( (X[i] - XB[j]) * np.sin(THETA[i] - 2*THETA[j]) 
-                + (Y[i] - YB[j]) * np.cos(THETA[i] - 2*THETA[j]) ) 
-            Q = ( (X[i] - XB[j]) * np.cos(THETA[i] - 2*THETA[j]) 
-                - (Y[i] - YB[j]) * np.sin(THETA[i] - 2*THETA[j]) )
-            CN2[i,j] = D + (0.5*Q*F/S[j]) - ((A*C + D*E)*G/S[j])
-            CN1[i,j] = 0.5*D*F + C*G - CN2[i,j]
-            CT2[i,j] = C + 0.5*P*F/S[j] + ((A*D-C*E)*G)/S[j]
-            CT1[i,j] = ((0.5*C*F) - (D*G) - (CT2[i,j]))
-            # For debugging
-            # print(f"A, B, C, D, E, F, G, P, Q =====> {A}, {B}, {C}, {D}, {E}, {F}, {G}, {P}, {Q}")
-            # print("CN2[i,j] ------>", CN2[i,j])
-            # print("CN1[i,j] ------>", CN1[i,j])
-            # print("CT2[i,j] ------>", CT2[i,j])
-            # print("CT1[i,j] ------>", CT1[i,j])
-print(A, B, C, D, E, F, G, P, Q)
-# Coords (X,Y) of control point and panel length s are computed
-# for each of the vortex panels. RHS represents the right-hand side of eq. 47 p. 130.
+    PI = 4.0 * np.arctan(1.0)
+    ALPHA = 8.0 * PI/180
 
-# Compute influence coeffs. in eqs. 47 and 49. respect.
-for i in range(M):
-    AN[i,0] = CN1[i,0]
-    AN[i,M] = CN2[i,M-1]
-    AT[i,0] = CT1[i,0]
-    AT[i,M] = CT2[i,M-1]
+    # Watch out the negative 1 was added befcause of zero based indexing??
+    for i in range(M):
+        IP1         = i + 1
+        X[i]        = 0.5*(XB[i] + XB[IP1])
+        Y[i]        = 0.5*(YB[i] + YB[IP1])
+        S[i]        = np.sqrt( (XB[IP1] - XB[i])**2 + (YB[IP1] - YB[i])**2 )
+        THETA[i]    = np.arctan2( (YB[IP1] - YB[i]), (XB[IP1] - XB[i]))
+        SINE[i]     = np.sin(THETA[i])
+        COSINE[i]   = np.cos(THETA[i])
+        RHS[i]      = np.sin(THETA[i] - ALPHA)
+
+    for i in range(M):
+        for j in range(M):
+            if i == j:
+                # print(f"I is {i}, J is {j}") # UID for debugging
+                CN1[i,j] = -1.0
+                CN2[i,j] = 1.0
+                CT1[i,j] = 0.5*PI
+                CT2[i,j] = 0.5*PI
+                # continue # break # still unsure about this
+            else:
+                A = (-(X[i] - XB[j]))*COSINE[j] - (Y[i]-YB[j])*SINE[j]
+                B = (X[i]-XB[j])**2 + (Y[i]-YB[j])**2
+                # B = ((X[i]-XB[j])**2) + ((Y[i] + YB[j])**2) # Watch out
+                C = np.sin(THETA[i] - THETA[j])
+                D = np.cos(THETA[i] - THETA[j])
+                E = (X[i] - XB[j]) * SINE[j] - (Y[i] - YB[j])*COSINE[j]
+                # print(f"ID: {i+1} {j+1}")
+                F = np.log(1.0 + S[j]*(S[j] + 2.0 * A)/B)
+                if np.isnan(F):
+                    F = np.nan_to_num(F)
+                G = np.arctan2(E*S[j], B+A*S[j])
+                P = ( (X[i] - XB[j]) * np.sin(THETA[i] - 2*THETA[j]) 
+                    + (Y[i] - YB[j]) * np.cos(THETA[i] - 2*THETA[j]) ) 
+                Q = ( (X[i] - XB[j]) * np.cos(THETA[i] - 2*THETA[j]) 
+                    - (Y[i] - YB[j]) * np.sin(THETA[i] - 2*THETA[j]) )
+                CN2[i,j] = D + (0.5*Q*F/S[j]) - ((A*C + D*E)*G/S[j])
+                CN1[i,j] = 0.5*D*F + C*G - CN2[i,j]
+                CT2[i,j] = C + 0.5*P*F/S[j] + ((A*D-C*E)*G)/S[j]
+                CT1[i,j] = ((0.5*C*F) - (D*G) - (CT2[i,j]))
+                # For debugging
+                # print(f"A, B, C, D, E, F, G, P, Q =====> {A}, {B}, {C}, {D}, {E}, {F}, {G}, {P}, {Q}")
+                # print("CN2[i,j] ------>", CN2[i,j])
+                # print("CN1[i,j] ------>", CN1[i,j])
+                # print("CT2[i,j] ------>", CT2[i,j])
+                # print("CT1[i,j] ------>", CT1[i,j])
+    # print(A, B, C, D, E, F, G, P, Q)
+
+    ##################
+    # Coords (X,Y) of control point and panel length s are computed
+    # for each of the vortex panels. RHS represents the right-hand side of eq. 47 p. 130.
+
+    # Compute influence coeffs. in eqs. 47 and 49. respect.
+    for i in range(M):
+        AN[i,0] = CN1[i,0]
+        AN[i,M] = CN2[i,M-1]
+        AT[i,0] = CT1[i,0]
+        AT[i,M] = CT2[i,M-1]
+        for j in range(1,M):
+            AN[i,j] = CN1[i,j] + CN2[i,j-1]
+            AT[i,j] = CT1[i,j] + CT2[i,j-1]
+    AN[M,0] = 1
+    AN[M,M] = 1
     for j in range(1,M):
-        AN[i,j] = CN1[i,j] + CN2[i,j-1]
-        AT[i,j] = CT1[i,j] + CT2[i,j-1]
-AN[M,0] = 1
-AN[M,M] = 1
-for j in range(1,M):
-    AN[M,j] = 0
-# RHS[M] = 0 # Not sure of this line...
-RHS = np.pad(RHS, (0, 1), 'constant')
-# print("RHS SHAPE IS:", RHS.shape)
-    # print()
-# Solve eq. 47 for dimensionless strengths gamma using cramer's rule. 
-# Then compute and print dimensionless velocity and pressure coeefffs 
-# at control points.
-GAMMA = np.pad(GAMMA, (0, 1), 'constant')
-cramer(AN, RHS, GAMMA, MP1)
-for i in range(M):
-    V[i] = np.cos(THETA[i] - ALPHA)
-    for j in range(MP1):
-        V[i] = V[i] + AT[i,j] * GAMMA[j]
-        CP[i] = 1 - V[i]**2
+        AN[M,j] = 0
+    RHS = np.pad(RHS, (0, 1), 'constant')
+
+    # Solve eq. 47 for dimensionless strengths gamma using cramer's rule. 
+    # Then compute and print dimensionless velocity and pressure coeefffs 
+    # at control points.
+    GAMMA = np.pad(GAMMA, (0, 1), 'constant')
+    cramer(AN, RHS, GAMMA, MP1)
+    for i in range(M):
+        V[i] = np.cos(THETA[i] - ALPHA)
+        for j in range(MP1):
+            V[i] = V[i] + AT[i,j] * GAMMA[j]
+            CP[i] = 1 - V[i]**2
 
 
-results = {}
-I = [i for i in range(M)]
-variables       = ["I","X", "Y","THETA", "S","GAMMA", "V", "CP"]
-corespondingArr  = [I, X, Y, THETA, S, GAMMA, V, CP]
-for i, ij in zip(variables,corespondingArr):
-    results[i] = ij
-    print(i)
-    print(ij)
+    results = {}
+    I = [i for i in range(M)]
+    variables           = ["I","X", "Y","THETA", "S","GAMMA", "V", "CP"]
+    corespondingArr  = [I, X, Y, THETA, S, GAMMA, V, CP]
+    for i, ij in zip(variables,corespondingArr):
+        results[i] = ij
+    #     print(i)
+    #     print(ij)
+    return results
 
-xc = []
+if __name__ == "__main__":
+    # Uses matplotlib to plot Cp over and under airfoil
+    import matplotlib.pyplot as plt
+    import matplotlib.lines as lines
+    from matplotlib import gridspec
 
-# print(results)
-print("Done")
+    seriesNumber = 2412
+    
+    fig, ax = plt.subplots()
+    gs = gridspec.GridSpec(2, 1, height_ratios=[2, 1]) 
+    ax = plt.subplot(gs[0])
+    # Coincides closely enough with the values using the book.
+    for i in [12,48]:
+        numberOfPanels = i
+        XB, YB = NACA.fourDigitSeries(seriesNumber, numberOfPanels)
+        results = panelMethod(XB,YB)
+        if i == 12:
+            marker  = 'o'
+            color   = 'black'
+            label   = f'{i}-panel solution'
+        else: 
+            marker  = 'x'
+            color   = 'gray'
+            label   = f'{i}-panel solution'
+
+        ax.plot(results["X"], results["CP"], marker,label=label, color='black', markersize=4)
+
+    # Format plot
+    ax.set_ylim(1, -4)
+    ax.set_xlim(0, 1)
+    ax.grid(True)
+    line = lines.Line2D([1, 0], [0,0],
+                        lw=2, color='black', axes=ax)
+    ax.add_line(line)
+    ax.set_ylabel('Cp')
+    ax.set_xlabel('x/c')
+    ax.legend()
+
+    # Plot foil under graph for cp
+    ax = plt.subplot(gs[1])
+    XB, YB = NACA.fourDigitSeries(seriesNumber, 200)
+    ax.plot(XB, YB, marker, color='black',linestyle='solid', markersize=1)
+    # Limits for foil plot
+    # ax.set_ylim(-0.6, 0.6)
+    ax.set_xlim(0, 1)
+    ax.set_xlabel(f"NACA{seriesNumber} foil")
+    ax.spines['top'].set_visible(False)
+    ax.spines['bottom'].set_visible(False)
+    fig.tight_layout(pad=2.0)
+
+    plt.show()
+    plt.clf()
+    # plt.savefig(f"./TMP_GIF/{seriesNumber}NACAfoil.png")
+    print("Done")
 
 # ## 
 # def timeit(method):
