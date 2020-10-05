@@ -5,7 +5,8 @@ Code was translated from (Kuethe & Chow, 1986) p. 134.
 
 # Example use:
 ```python airfoil.py```
-> Example results for NACA2412 Foil at varying angles of attack [exampleResults](./exampleImages/output.gif)
+> Example results for NACA2412 Foil at varying angles of attack 
+![exampleResults](./exampleImages/output.gif)
 
 ## 
 Involves the representation of the airfoil with a closed polygon of vortex panels.
