@@ -1,3 +1,4 @@
 airfoil.exe
-./TMP_GIF
-./__pycache__
+TMP_GIF/
+__pycache__/
+NACA2412.txt

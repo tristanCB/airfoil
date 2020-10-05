@@ -24,7 +24,16 @@ def fourDigitSeries(digits:int, numPanels: int, plot = False):
     # Panels should be a multiple a 2.
     assert numPanels % 2 == 0
 
-    digits = str(digits)
+    digits = str(digits).zfill(4)
+    
+    # Ensures proper input
+    # if len(digits) > 4:
+    #     raise InputError("Invalid input... 4 digits series?")
+    # elif len(digits) < 4:
+    #     while len(digits) < 4:
+    #         digits = '0'+digits
+
+
     # maxCamber = location of the max camber
     # cpMaxCamber = chordwise position of the mmaximum camber
     # thicknessRatio =  airfoil having a thickness XX % (base chord) of the chord.
@@ -53,7 +62,6 @@ def fourDigitSeries(digits:int, numPanels: int, plot = False):
             dycOVERdx[i] = 2 * epsilon / (1-p)**2 * (p - ij/c)
 
         yt[i] = t/0.2*(0.2969*np.sqrt(ij) - 0.1260*ij - 0.3516*ij**2 + 0.2843*ij**3 - 0.1015*ij**4)
-        print(yt[i])
         theta[i] = np.arctan(dycOVERdx[i])
 
         x_upper[i], y_upper[i] = (ij - yt[i]*np.sin(theta[i])), (meanCamberLine[i] + yt[i]*np.cos(theta[i]))
@@ -84,7 +92,6 @@ def fourDigitSeries(digits:int, numPanels: int, plot = False):
                     {YB}
             '''
         )
-        plt.clf()
         fig, ax = plt.subplots()
         ax.plot(XB, YB, 'o', color='black', alpha=0.2)
         ax.plot(XB2412, YB2412, '_', color='red', alpha=0.2)
@@ -93,12 +100,19 @@ def fourDigitSeries(digits:int, numPanels: int, plot = False):
         plt.clf()
     return XB, YB
 
+def ansysPtFormat(outputPath, XB, YB):
+    with open(outputPath, 'w') as file:
+        for i, ij in enumerate(XB):
+            file.writelines(f"1 {i+1} {ij} {YB[i]} \n")
+
 if __name__ == "__main__":
     # Points for NACA 2412 from two independent sources.
     # The first is from ()
     XB2412 = np.array([1.,.933,.750,.500,.250,.067,.0,.067,.25,.500,.750,.933, 1.0])
     YB2412 = np.array([.0,-.005,-.017,-.033,-.042,-.033,.0,.045,.076,.072,.044,.013,0.])
     # The specific format as a string is as so fortran knows they are all real numbers.
+
+
 
     # Values taken from http://airfoiltools.com/airfoil/details?airfoil=naca2412-il
     XB2412_foilTools = np.array([1.,.95,.90,.8,.7,.6,.5,.4,.3,.25,.20,0.15,0.1,0.075,0.0500,0.025,0.0125,0.0,0.0125,0.0250,0.05,0.075,0.1,0.15,0.20,0.25,0.3,0.4,0.5,0.6,0.7,0.8,0.9,0.95,1.0])
@@ -110,4 +124,8 @@ if __name__ == "__main__":
     assert XB2412_foilTools.all() == XB.all()
     assert YB2412_foilTools.all() == YB.all()
     # PASS
+
+    XB, YB = fourDigitSeries(2412, 48)
+    ansysPtFormat("./NACA2412.txt", XB, YB)
+
     

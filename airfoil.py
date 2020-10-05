@@ -2,14 +2,10 @@
 # Translation of FORTRAN program p. 133 from 
 # This program translates the FORTRAN program on p. 133 of 
 # Foundations of Aerodynamics: Bases of Aerodynamic Design — Fourth Edition" from Kuethea. M. and Chowc-Y (1968)
-
 # Author: Tristan CB
 # Dependencies
 import numpy as np
-import pandas
 import math
-import time
-import NACA
 # Summary of program
 """
 This prgram computes velocity and pressure coefficients
@@ -17,9 +13,6 @@ around an airfoil, whose contor is approximated by vortex panels
 of linearly varying strength.
 Assumptions: 2D incompressible flow
 """
-# Quick links FORTRAN 77
-# https://www.obliquity.com/computer/fortran/array.html
-
 #
 # Ideas
 # Encoding equations into CNN would it be more efficient?
@@ -101,7 +94,7 @@ def cramer(C, A, X, N):
         # print(f"GAMMA will now be? --> {X[k]}")
     return X
 
-def panelMethod(XB: np.array([]),YB: np.array([])) -> dict:
+def panelMethod(XB: np.array([]),YB: np.array([]), angle=8.0) -> dict:
     """
     # Specify coordinates (XB, YB) of boundary points on airfoil surface. 
     # The last point coinsides with the first
@@ -126,7 +119,7 @@ def panelMethod(XB: np.array([]),YB: np.array([])) -> dict:
     AT = np.zeros((M,MP1))
 
     PI = 4.0 * np.arctan(1.0)
-    ALPHA = 8.0 * PI/180
+    ALPHA = angle * PI/180
 
     # Watch out the negative 1 was added befcause of zero based indexing??
     for i in range(M):
@@ -219,72 +212,28 @@ def panelMethod(XB: np.array([]),YB: np.array([])) -> dict:
 
 if __name__ == "__main__":
     # Uses matplotlib to plot Cp over and under airfoil
+    import argparse
     import matplotlib.pyplot as plt
-    import matplotlib.lines as lines
-    from matplotlib import gridspec
+    from utils import rotateNumpy, plotFoil
 
-    seriesNumber = 2412
+    parser = argparse.ArgumentParser()
     
-    fig, ax = plt.subplots()
-    gs = gridspec.GridSpec(2, 1, height_ratios=[2, 1]) 
-    ax = plt.subplot(gs[0])
-    # Coincides closely enough with the values using the book.
-    for i in [12,48]:
-        numberOfPanels = i
-        XB, YB = NACA.fourDigitSeries(seriesNumber, numberOfPanels)
-        results = panelMethod(XB,YB)
-        if i == 12:
-            marker  = 'o'
-            color   = 'black'
-            label   = f'{i}-panel solution'
-        else: 
-            marker  = 'x'
-            color   = 'gray'
-            label   = f'{i}-panel solution'
+    parser.add_argument('--alpha',      type=float, help='Angle of attack. Float.', 
+                        default=8.0)
+    
+    parser.add_argument('--NACA4Digit', type=int,   help='NACA 4 digits series number to be plotted', 
+                        default=2412)
+	
+    args = parser.parse_args()
 
-        ax.plot(results["X"], results["CP"], marker,label=label, color='black', markersize=4)
+    # Parse user inputs
+    angle           = args.alpha
+    seriesNumber    = args.NACA4Digit
+    # Show Foil  -- Recreation of fig frosm Kuethea (1968)
 
-    # Format plot
-    ax.set_ylim(1, -4)
-    ax.set_xlim(0, 1)
-    ax.grid(True)
-    line = lines.Line2D([1, 0], [0,0],
-                        lw=2, color='black', axes=ax)
-    ax.add_line(line)
-    ax.set_ylabel('Cp')
-    ax.set_xlabel('x/c')
-    ax.legend()
-
-    # Plot foil under graph for cp
-    ax = plt.subplot(gs[1])
-    XB, YB = NACA.fourDigitSeries(seriesNumber, 200)
-    ax.plot(XB, YB, marker, color='black',linestyle='solid', markersize=1)
-    # Limits for foil plot
-    # ax.set_ylim(-0.6, 0.6)
-    ax.set_xlim(0, 1)
-    ax.set_xlabel(f"NACA{seriesNumber} foil")
-    ax.spines['top'].set_visible(False)
-    ax.spines['bottom'].set_visible(False)
-    fig.tight_layout(pad=2.0)
-
-    plt.show()
+    plotFoil(seriesNumber,angle).show()
     plt.clf()
-    # plt.savefig(f"./TMP_GIF/{seriesNumber}NACAfoil.png")
-    print("Done")
 
-# ## 
-# def timeit(method):
-#     def timed(*args, **kw):
-#         ts = time.time()
-#         result = method(*args, **kw)
-#         te = time.time()
-#         if 'log_time' in kw:
-#             name = kw.get('log_name', method.__name__.upper())
-#             kw['log_time'][name] = int((te - ts) * 1000)
-#         else:
-#             print(f"{method.__name__} Took --> {(te - ts)} <-- seconds")
-#         return result
-#     return timed
-
-
-exit()
+    # END #
+    print(f"Done plotting NACA {seriesNumber}.")
+    exit()
