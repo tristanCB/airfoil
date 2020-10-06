@@ -231,7 +231,9 @@ if __name__ == "__main__":
     seriesNumber    = args.NACA4Digit
     # Show Foil  -- Recreation of fig frosm Kuethea (1968)
 
-    plotFoil(seriesNumber,angle).show()
+    # Numbers of panels
+    panels = [12,48]
+    plotFoil(seriesNumber,angle,panels=panels).show()
     plt.clf()
 
     # END #

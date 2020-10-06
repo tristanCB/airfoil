@@ -13,14 +13,14 @@ import math
 import NACA
 from airfoil import panelMethod
 
-def plotFoil(seriesNumber, angle):
+def plotFoil(seriesNumber, angle, panels = [12,48]):
         fig, ax = plt.subplots()
         gs = gridspec.GridSpec(2, 1, height_ratios=[1, 1]) 
         ax = plt.subplot(gs[0])
         # first of all, the base transformation of the data points is needed
 
         # Coincides closely enough with the values using the book.
-        for i in [12, 48]:
+        for i in panels:
             numberOfPanels = i
             XB, YB = NACA.fourDigitSeries(seriesNumber, numberOfPanels)
             results = panelMethod(XB,YB, angle=angle)
