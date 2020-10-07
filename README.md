@@ -1,7 +1,7 @@
 
 # Airfoil
 Computes velocity and pressure coefficient around an airfoil.
-Code was translated from (Kuethe & Chow, 1986) p. 134 [*](.airfoil.f).
+Code was translated from (Kuethe & Chow, 1986) p. 134 [*](airfoil.f).
 
 # Example use:
 The main section of airfoil.py reproduces fig.26 of caphter 5 section 11: The Airfoil of Arbitrary Thickness and Camber from (Kuethe & Chow, 1986) p. 134.
